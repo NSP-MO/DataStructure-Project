@@ -63,26 +63,15 @@ export default function IntegrationPage() {
               <h3 className="text-lg font-medium">Langkah-langkah Penggunaan</h3>
               <ol className="list-decimal list-inside space-y-3">
                 <li className="space-y-2">
-                  <p>Pastikan Node.js sudah terinstal di komputer Anda</p>
-                </li>
-                <li className="space-y-2">
-                  <p>Instal dependensi Node.js yang diperlukan:</p>
+                  <p>Jalankan script setup untuk mengatur lingkungan:</p>
                   <div className="bg-muted p-3 rounded-md text-sm font-mono">
-                    <p>npm install</p>
+                    <p>setup.bat</p>
                   </div>
                 </li>
                 <li className="space-y-2">
-                  <p>Sinkronkan data awal dari Supabase:</p>
+                  <p>Jalankan program C++ dengan script run:</p>
                   <div className="bg-muted p-3 rounded-md text-sm font-mono">
-                    <p>npm run sync</p>
-                  </div>
-                </li>
-                <li className="space-y-2">
-                  <p>Kompilasi dan jalankan program C++ di Windows:</p>
-                  <div className="bg-muted p-3 rounded-md text-sm font-mono">
-                    <p>// Gunakan compiler C++ yang tersedia di Windows</p>
-                    <p>g++ -std=c++17 cpp/ktp_system_simple.cpp -o ktp_system.exe</p>
-                    <p>// Atau jalankan langsung dengan C++ runner</p>
+                    <p>run_ktp.bat</p>
                   </div>
                 </li>
                 <li>

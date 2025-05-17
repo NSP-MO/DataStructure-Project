@@ -1,4 +1,5 @@
 const fs = require("fs")
+const path = require("path")
 const { createClient } = require("@supabase/supabase-js")
 
 // Supabase client
@@ -6,14 +7,21 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// File paths
-const commandFilePath = "data/ktp_command.txt"
-const responseFilePath = "data/ktp_response.txt"
-const applicationsFilePath = "data/ktp_applications_sync.txt"
+// File paths - use path.join for cross-platform compatibility
+const dataDir = path.join(process.cwd(), "data")
+const commandFilePath = path.join(dataDir, "ktp_command.txt")
+const responseFilePath = path.join(dataDir, "ktp_response.txt")
+const applicationsFilePath = path.join(dataDir, "ktp_applications_sync.txt")
+
+// Ensure data directory exists
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true })
+}
 
 // Helper function to write response
 function writeResponse(message) {
   fs.writeFileSync(responseFilePath, message)
+  console.log(message)
 }
 
 // Helper function to write applications to file
@@ -46,8 +54,19 @@ async function writeApplicationsToFile() {
 // Process command
 async function processCommand() {
   try {
+    // Check if command file exists
+    if (!fs.existsSync(commandFilePath)) {
+      writeResponse("Command file not found.")
+      return
+    }
+
     // Read command file
     const fileContent = fs.readFileSync(commandFilePath, "utf8").split("\n")
+    if (fileContent.length < 2) {
+      writeResponse("Invalid command format.")
+      return
+    }
+
     const command = fileContent[0].trim()
     const data = fileContent[1].trim()
 
@@ -82,7 +101,13 @@ async function handleSubmit(data) {
   try {
     // Parse data
     // Format: submit|id|name|address|region|submissionTime
-    const [_, id, name, address, region, submissionTimeStr] = data.split("|")
+    const parts = data.split("|")
+    if (parts.length < 6) {
+      writeResponse("Invalid submit data format.")
+      return
+    }
+
+    const [_, id, name, address, region, submissionTimeStr] = parts
     const submissionTime = Number.parseInt(submissionTimeStr)
 
     // Insert into Supabase
@@ -130,7 +155,13 @@ async function handleEdit(data) {
   try {
     // Parse data
     // Format: edit|id|newName|newAddress|newRegion
-    const [_, id, newName, newAddress, newRegion] = data.split("|")
+    const parts = data.split("|")
+    if (parts.length < 5) {
+      writeResponse("Invalid edit data format.")
+      return
+    }
+
+    const [_, id, newName, newAddress, newRegion] = parts
 
     // First get the current application
     const { data: currentApp, error: fetchError } = await supabase
@@ -234,7 +265,9 @@ async function handleUndo(id) {
 // Main function
 async function main() {
   try {
+    console.log("Starting command processing...")
     await processCommand()
+    console.log("Command processing complete.")
   } catch (error) {
     writeResponse(`Error: ${error.message}`)
   }

@@ -1,18 +1,18 @@
 const fs = require("fs")
-const { createClient } = require("@supabase/supabase-js")
 const path = require("path")
+const { createClient } = require("@supabase/supabase-js")
 
 // Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// File paths
-const applicationsFilePath = path.join(process.cwd(), "data", "ktp_applications_sync.txt")
-const responseFilePath = path.join(process.cwd(), "data", "ktp_response.txt")
+// File paths - use path.join for cross-platform compatibility
+const dataDir = path.join(process.cwd(), "data")
+const applicationsFilePath = path.join(dataDir, "ktp_applications_sync.txt")
+const responseFilePath = path.join(dataDir, "ktp_response.txt")
 
 // Ensure data directory exists
-const dataDir = path.join(process.cwd(), "data")
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true })
 }
@@ -54,7 +54,11 @@ async function syncFromSupabase() {
 
 // Main function
 async function main() {
-  await syncFromSupabase()
+  try {
+    await syncFromSupabase()
+  } catch (error) {
+    writeResponse(`Error: ${error.message}`)
+  }
 }
 
 // Run the main function

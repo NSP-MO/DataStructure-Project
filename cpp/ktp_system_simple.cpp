@@ -40,8 +40,9 @@ private:
             cout << "Command written to file. Waiting for response..." << endl;
             
             // Wait for the response file to be updated
-            // In a real application, you would use a more sophisticated approach
-            system("node scripts/sync_command.js");
+            // Use the correct path to the Node.js script
+            // Note: This assumes the script is in the same directory as the executable
+            system("node ../scripts/sync_command.js");
             
             // Read the response
             readResponse();
@@ -92,7 +93,12 @@ private:
             
             string timeStr;
             getline(ss, timeStr, '|');
-            app.submissionTime = stoll(timeStr);
+            try {
+                app.submissionTime = stoll(timeStr);
+            } catch (const exception& e) {
+                cerr << "Error parsing time: " << e.what() << endl;
+                app.submissionTime = time(nullptr);
+            }
             
             getline(ss, app.status, '|');
             
@@ -103,14 +109,21 @@ private:
         cout << "Loaded " << applications.size() << " applications from file." << endl;
     }
 
+    // Create directories if they don't exist
+    void ensureDirectoriesExist() {
+        // Create data directory
+        system("mkdir data 2>nul");
+    }
+
 public:
     KtpSystem() {
+        // Use relative paths that work from the current directory
         outputFilePath = "data/ktp_applications_sync.txt";
         commandFilePath = "data/ktp_command.txt";
         responseFilePath = "data/ktp_response.txt";
         
-        // Ensure the data directory exists
-        system("mkdir -p data");
+        // Ensure directories exist
+        ensureDirectoriesExist();
         
         // Create empty files if they don't exist
         ofstream outputFile(outputFilePath, ios::app);
@@ -190,7 +203,8 @@ public:
     }
     
     void refreshData() {
-        writeCommand("refresh", "");
+        // Use the correct path to the Node.js script
+        system("node ../scripts/sync_data.js");
         loadApplicationsFromFile();
         cout << "Data refreshed from server." << endl;
     }
