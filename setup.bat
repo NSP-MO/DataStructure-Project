@@ -14,6 +14,12 @@ REM Install Node.js dependencies
 echo Installing Node.js dependencies...
 call npm install @supabase/supabase-js dotenv
 
+REM Create empty data files
+echo Creating empty data files...
+type nul > data\ktp_applications_sync.txt
+type nul > data\ktp_command.txt
+type nul > data\ktp_response.txt
+
 REM Sync data from Supabase
 echo Syncing data from Supabase...
 node scripts/sync_data.js

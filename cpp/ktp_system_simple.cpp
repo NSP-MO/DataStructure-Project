@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <sstream>
 #include <cstdlib>
+#include <filesystem>
 
 using namespace std;
+namespace fs = std::filesystem;
 
 struct Applicant {
     string id;
@@ -24,6 +26,7 @@ private:
     string outputFilePath;
     string commandFilePath;
     string responseFilePath;
+    string projectRoot;
 
     // Helper function to generate a unique ID
     string generateId(const string& region) {
@@ -39,10 +42,12 @@ private:
             commandFile.close();
             cout << "Command written to file. Waiting for response..." << endl;
             
-            // Wait for the response file to be updated
-            // Use the correct path to the Node.js script
-            // This assumes the script is in the project root directory
-            system("node scripts/sync_command.js");
+            // Use absolute paths for Node.js scripts
+            string scriptPath = projectRoot + "/scripts/sync_command.js";
+            string nodeCommand = "node \"" + scriptPath + "\"";
+            cout << "Executing: " << nodeCommand << endl;
+            
+            system(nodeCommand.c_str());
             
             // Read the response
             readResponse();
@@ -111,16 +116,39 @@ private:
 
     // Create directories if they don't exist
     void ensureDirectoriesExist() {
-        // Create data directory
-        system("mkdir data 2>nul");
+        // Create data directory using filesystem
+        fs::path dataPath = fs::path(projectRoot) / "data";
+        if (!fs::exists(dataPath)) {
+            try {
+                fs::create_directories(dataPath);
+                cout << "Created data directory at: " << dataPath << endl;
+            } catch (const exception& e) {
+                cerr << "Error creating data directory: " << e.what() << endl;
+            }
+        }
+    }
+
+    // Find the project root directory
+    string findProjectRoot() {
+        // Get the current working directory
+        fs::path currentPath = fs::current_path();
+        cout << "Current working directory: " << currentPath << endl;
+        
+        // For simplicity, we'll use the current directory as the project root
+        return currentPath.string();
     }
 
 public:
     KtpSystem() {
-        // Use paths relative to the current directory
-        outputFilePath = "data/ktp_applications_sync.txt";
-        commandFilePath = "data/ktp_command.txt";
-        responseFilePath = "data/ktp_response.txt";
+        // Find the project root directory
+        projectRoot = findProjectRoot();
+        
+        // Use absolute paths for files
+        outputFilePath = projectRoot + "/data/ktp_applications_sync.txt";
+        commandFilePath = projectRoot + "/data/ktp_command.txt";
+        responseFilePath = projectRoot + "/data/ktp_response.txt";
+        
+        cout << "Using data files in: " << projectRoot << "/data/" << endl;
         
         // Ensure directories exist
         ensureDirectoriesExist();
@@ -216,8 +244,12 @@ public:
     
     void refreshData() {
         cout << "Refreshing data from Supabase..." << endl;
-        // Use the correct path to the Node.js script
-        system("node scripts/sync_data.js");
+        // Use absolute path to the Node.js script
+        string scriptPath = projectRoot + "/scripts/sync_data.js";
+        string nodeCommand = "node \"" + scriptPath + "\"";
+        cout << "Executing: " << nodeCommand << endl;
+        
+        system(nodeCommand.c_str());
         loadApplicationsFromFile();
     }
 };
