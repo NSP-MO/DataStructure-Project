@@ -1,10 +1,28 @@
+// Load environment variables from .env file
+require("dotenv").config()
+
 const fs = require("fs")
 const path = require("path")
 const { createClient } = require("@supabase/supabase-js")
 
-// Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Get Supabase credentials from environment variables
+let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+let supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+// Check if environment variables are loaded
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Error: Supabase environment variables are not set.")
+  console.error("NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl)
+  console.error("SUPABASE_SERVICE_ROLE_KEY:", supabaseKey ? "***" : "undefined")
+
+  // Hardcode the values as a fallback
+  console.log("Using hardcoded Supabase credentials as fallback...")
+  supabaseUrl = "https://kohsgblrsoptwyqwnnlr.supabase.co"
+  supabaseKey =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvaHNnYmxyc29wdHd5cXdubmxyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NzQ2NjgzNywiZXhwIjoyMDYzMDQyODM3fQ.cG2rNW19OsOBMvmov2BP-sDkTEepjItY7X3ElNW5QnA"
+}
+
+console.log("Connecting to Supabase at:", supabaseUrl)
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 // File paths - use path.join for cross-platform compatibility
@@ -41,12 +59,16 @@ async function syncFromSupabase() {
 
     // Write applications to file
     let fileContent = ""
-    for (const app of data) {
-      fileContent += `${app.id}|${app.name}|${app.address}|${app.region}|${app.submission_time}|${app.status}\n`
+    if (data && data.length > 0) {
+      for (const app of data) {
+        fileContent += `${app.id}|${app.name}|${app.address}|${app.region}|${app.submission_time}|${app.status}\n`
+      }
+      fs.writeFileSync(applicationsFilePath, fileContent)
+      writeResponse(`Successfully synced ${data.length} applications from Supabase.`)
+    } else {
+      fs.writeFileSync(applicationsFilePath, "")
+      writeResponse("No applications found in Supabase.")
     }
-
-    fs.writeFileSync(applicationsFilePath, fileContent)
-    writeResponse(`Successfully synced ${data.length} applications from Supabase.`)
   } catch (error) {
     writeResponse(`Error: ${error.message}`)
   }

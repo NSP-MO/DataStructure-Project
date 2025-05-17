@@ -41,13 +41,13 @@ private:
             
             // Wait for the response file to be updated
             // Use the correct path to the Node.js script
-            // Note: This assumes the script is in the same directory as the executable
-            system("node ../scripts/sync_command.js");
+            // This assumes the script is in the project root directory
+            system("node scripts/sync_command.js");
             
             // Read the response
             readResponse();
         } else {
-            cerr << "Could not open command file for writing." << endl;
+            cerr << "Could not open command file for writing: " << commandFilePath << endl;
         }
     }
 
@@ -61,7 +61,7 @@ private:
             }
             responseFile.close();
         } else {
-            cerr << "Could not open response file for reading." << endl;
+            cerr << "Could not open response file for reading: " << responseFilePath << endl;
         }
     }
 
@@ -71,7 +71,7 @@ private:
         
         ifstream file(outputFilePath);
         if (!file.is_open()) {
-            cerr << "Could not open applications file for reading." << endl;
+            cerr << "Could not open applications file for reading: " << outputFilePath << endl;
             return;
         }
         
@@ -117,7 +117,7 @@ private:
 
 public:
     KtpSystem() {
-        // Use relative paths that work from the current directory
+        // Use paths relative to the current directory
         outputFilePath = "data/ktp_applications_sync.txt";
         commandFilePath = "data/ktp_command.txt";
         responseFilePath = "data/ktp_response.txt";
@@ -127,13 +127,25 @@ public:
         
         // Create empty files if they don't exist
         ofstream outputFile(outputFilePath, ios::app);
+        if (!outputFile.is_open()) {
+            cerr << "Could not create output file: " << outputFilePath << endl;
+        }
         outputFile.close();
         
         ofstream commandFile(commandFilePath, ios::app);
+        if (!commandFile.is_open()) {
+            cerr << "Could not create command file: " << commandFilePath << endl;
+        }
         commandFile.close();
         
         ofstream responseFile(responseFilePath, ios::app);
+        if (!responseFile.is_open()) {
+            cerr << "Could not create response file: " << responseFilePath << endl;
+        }
         responseFile.close();
+        
+        // Initial data sync
+        refreshData();
         
         loadApplicationsFromFile();
     }
@@ -192,7 +204,7 @@ public:
         
         int position = 1;
         for (const auto& app : applications) {
-            time_t submissionTime = app.submissionTime;
+            time_t submissionTime = app.submissionTime / 1000; // Convert from milliseconds if needed
             cout << position++ << ". ID: " << app.id 
                  << "\n   Name: " << app.name
                  << "\n   Region: " << app.region
@@ -203,10 +215,10 @@ public:
     }
     
     void refreshData() {
+        cout << "Refreshing data from Supabase..." << endl;
         // Use the correct path to the Node.js script
-        system("node ../scripts/sync_data.js");
+        system("node scripts/sync_data.js");
         loadApplicationsFromFile();
-        cout << "Data refreshed from server." << endl;
     }
 };
 
