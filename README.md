@@ -1,30 +1,102 @@
-# Implement modern KTP website
+# DataStructure-Project
 
-*Automatically synced with your [v0.dev](https://v0.dev) deployments*
+A simple C++ application for managing KTP applications using a binary search tree (BST) with NextJs + Supabase data sync.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/aararief-1158s-projects/v0-implement-modern-ktp-website)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/wTpAlx8b81f)
+### Data Will Be Shown at: **[https://monitoring-ktp-strukdat.vercel.app](https://monitoring-ktp-strukdat.vercel.app/)**
 
-## Overview
+---
 
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
+## 🚀 Quick Start
 
-## Deployment
+### 1. Clone the Repo
 
-Your project is live at:
+```bash
+git clone https://github.com/NSP-MO/DataStructure-Project.git
+cd DataStructure-Project
+```
 
-**[https://vercel.com/aararief-1158s-projects/v0-implement-modern-ktp-website](https://vercel.com/aararief-1158s-projects/v0-implement-modern-ktp-website)**
+### 2. Configure Your Supabase (optional)
 
-## Build your app
+Create a file named `.env` in the project root (next to `setup.bat`) with **your** Supabase credentials:
 
-Continue building your app on:
+```ini
+# .env
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_SERVICE_KEY=<your-service-key>
+```
 
-**[https://v0.dev/chat/projects/wTpAlx8b81f](https://v0.dev/chat/projects/wTpAlx8b81f)**
+> Replace `<your-project-ref>` and `<your-service-key>` with the values from your Supabase dashboard.
 
-## How It Works
+---
 
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+## 🔧 Setup & Initial Sync
+
+On **Windows**, just run:
+
+```batch
+setup.bat
+```
+
+This will:
+
+1. Create necessary directories (`build/`, `data/`, etc.)
+2. Install any required scripts/tools
+3. Perform an initial sync of KTP data from **your** Supabase
+
+---
+
+## ▶️ Running the KTP System
+
+After setup, start the app with:
+
+```batch
+run_ktp.bat
+```
+
+This will:
+
+1. Sync the latest data from **your** Supabase
+2. Launch the C++ console application
+
+---
+
+## 📋 Using the C++ Console
+
+Once the app is running, you can:
+
+1. **Submit** new KTP applications
+2. **Process** pending verifications
+3. **Edit** existing applications
+4. **View & sort** the application queue
+5. **Export** or **print** summaries
+6. And more...
+
+Follow on-screen menus to navigate.
+
+---
+
+## 🛠️ Build Manually
+
+If you prefer to compile by hand:
+
+```bash
+mkdir -p build
+cd build
+g++ -std=c++17 ../src/ktp_system_simple-bst.cpp -o ktp_system
+./ktp_system
+```
+
+---
+
+## ❓ Troubleshooting
+
+* **supabaseUrl is required**
+  • Make sure your `.env` is in the project root, and `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` are correct.
+
+* **Compiler errors**
+  • Verify you’re using C++17 or later and that `src/ktp_system_simple-bst.cpp` exists.
+
+* **Data not syncing**
+  • Check network connectivity and that your Supabase project is active.
+
+---
