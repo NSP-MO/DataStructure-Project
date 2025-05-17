@@ -1,76 +1,7 @@
 "use server"
 
 import type { Applicant, ApplicationFormData } from "./types"
-import fs from "fs"
-import path from "path"
-
-// File path for data storage
-const DATA_FILE_PATH = path.join(process.cwd(), "data", "ktp_applications.json")
-const REVISION_FILE_PATH = path.join(process.cwd(), "data", "ktp_revisions.json")
-
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dataDir = path.join(process.cwd(), "data")
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-  }
-}
-
-// Helper function to read applications from file
-const readApplicationsFromFile = (): Applicant[] => {
-  ensureDataDir()
-
-  if (!fs.existsSync(DATA_FILE_PATH)) {
-    return []
-  }
-
-  try {
-    const data = fs.readFileSync(DATA_FILE_PATH, "utf8")
-    return JSON.parse(data)
-  } catch (error) {
-    console.error("Error reading applications file:", error)
-    return []
-  }
-}
-
-// Helper function to write applications to file
-const writeApplicationsToFile = (applications: Applicant[]) => {
-  ensureDataDir()
-
-  try {
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(applications, null, 2))
-  } catch (error) {
-    console.error("Error writing applications file:", error)
-  }
-}
-
-// Helper function to read revisions from file
-const readRevisionsFromFile = (): Record<string, Applicant[]> => {
-  ensureDataDir()
-
-  if (!fs.existsSync(REVISION_FILE_PATH)) {
-    return {}
-  }
-
-  try {
-    const data = fs.readFileSync(REVISION_FILE_PATH, "utf8")
-    return JSON.parse(data)
-  } catch (error) {
-    console.error("Error reading revisions file:", error)
-    return {}
-  }
-}
-
-// Helper function to write revisions to file
-const writeRevisionsToFile = (revisions: Record<string, Applicant[]>) => {
-  ensureDataDir()
-
-  try {
-    fs.writeFileSync(REVISION_FILE_PATH, JSON.stringify(revisions, null, 2))
-  } catch (error) {
-    console.error("Error writing revisions file:", error)
-  }
-}
+import { supabase } from "./supabase"
 
 // Generate a unique ID based on region and timestamp
 const generateId = (region: string): string => {
@@ -79,13 +10,21 @@ const generateId = (region: string): string => {
 
 // Get all applications
 export async function getApplications(): Promise<Applicant[]> {
-  return readApplicationsFromFile()
+  const { data, error } = await supabase
+    .from("ktp_applications")
+    .select("*")
+    .order("submission_time", { ascending: true })
+
+  if (error) {
+    console.error("Error fetching applications:", error)
+    return []
+  }
+
+  return data as Applicant[]
 }
 
 // Submit a new application
 export async function submitApplication(formData: ApplicationFormData): Promise<Applicant> {
-  const applications = readApplicationsFromFile()
-
   const newApplication: Applicant = {
     id: generateId(formData.region),
     name: formData.name,
@@ -95,101 +34,161 @@ export async function submitApplication(formData: ApplicationFormData): Promise<
     status: "pending",
   }
 
-  applications.push(newApplication)
-  writeApplicationsToFile(applications)
+  const { error } = await supabase.from("ktp_applications").insert(newApplication)
+
+  if (error) {
+    console.error("Error submitting application:", error)
+    throw new Error("Failed to submit application")
+  }
 
   return newApplication
 }
 
 // Process verification for an application
 export async function processVerification(id: string): Promise<boolean> {
-  const applications = readApplicationsFromFile()
+  const { error } = await supabase.from("ktp_applications").update({ status: "verified" }).eq("id", id)
 
-  const appIndex = applications.findIndex((app) => app.id === id)
-  if (appIndex === -1) return false
-
-  applications[appIndex].status = "verified"
-  writeApplicationsToFile(applications)
+  if (error) {
+    console.error("Error verifying application:", error)
+    return false
+  }
 
   return true
 }
 
 // Edit an application
 export async function editApplication(id: string, formData: ApplicationFormData): Promise<Applicant | null> {
-  const applications = readApplicationsFromFile()
+  // First get the current application
+  const { data: currentApp, error: fetchError } = await supabase
+    .from("ktp_applications")
+    .select("*")
+    .eq("id", id)
+    .single()
 
-  // Find the application
-  const appIndex = applications.findIndex((app) => app.id === id)
-  if (appIndex === -1) return null
-
-  // Store the original application in the revision stack
-  const revisions = readRevisionsFromFile()
-
-  if (!revisions[id]) {
-    revisions[id] = []
+  if (fetchError || !currentApp) {
+    console.error("Error fetching application for edit:", fetchError)
+    return null
   }
 
-  revisions[id].push({ ...applications[appIndex] })
-  writeRevisionsToFile(revisions)
+  // Store the original application in the revision table
+  const { error: revisionError } = await supabase.from("ktp_revisions").insert({
+    application_id: id,
+    name: currentApp.name,
+    address: currentApp.address,
+    region: currentApp.region,
+    submission_time: currentApp.submissionTime,
+    status: currentApp.status,
+    revision_time: Date.now(),
+  })
+
+  if (revisionError) {
+    console.error("Error storing revision:", revisionError)
+    return null
+  }
 
   // Update the application
   const updatedApp: Applicant = {
-    ...applications[appIndex],
+    ...currentApp,
     name: formData.name,
     address: formData.address,
     region: formData.region,
     status: "revision",
   }
 
-  applications[appIndex] = updatedApp
-  writeApplicationsToFile(applications)
+  const { error: updateError } = await supabase
+    .from("ktp_applications")
+    .update({
+      name: formData.name,
+      address: formData.address,
+      region: formData.region,
+      status: "revision",
+    })
+    .eq("id", id)
+
+  if (updateError) {
+    console.error("Error updating application:", updateError)
+    return null
+  }
 
   return updatedApp
 }
 
 // Undo a revision
 export async function undoRevision(id: string): Promise<Applicant | null> {
-  const applications = readApplicationsFromFile()
-  const revisions = readRevisionsFromFile()
+  // Get the latest revision for this application
+  const { data: revisions, error: fetchError } = await supabase
+    .from("ktp_revisions")
+    .select("*")
+    .eq("application_id", id)
+    .order("revision_time", { ascending: false })
+    .limit(1)
 
-  if (!revisions[id] || revisions[id].length === 0) {
+  if (fetchError || !revisions || revisions.length === 0) {
+    console.error("Error fetching revisions:", fetchError)
     return null
   }
 
-  // Find the application
-  const appIndex = applications.findIndex((app) => app.id === id)
-  if (appIndex === -1) return null
+  const lastRevision = revisions[0]
 
-  // Get the last revision
-  const lastRevision = revisions[id].pop()
-  if (!lastRevision) return null
+  // Update the application with the revision data
+  const { error: updateError } = await supabase
+    .from("ktp_applications")
+    .update({
+      name: lastRevision.name,
+      address: lastRevision.address,
+      region: lastRevision.region,
+      status: lastRevision.status,
+    })
+    .eq("id", id)
 
-  // Update revisions file
-  writeRevisionsToFile(revisions)
+  if (updateError) {
+    console.error("Error restoring revision:", updateError)
+    return null
+  }
 
-  // Restore the application
-  applications[appIndex] = lastRevision
-  writeApplicationsToFile(applications)
+  // Delete the revision
+  const { error: deleteError } = await supabase.from("ktp_revisions").delete().eq("id", lastRevision.id)
 
-  return lastRevision
+  if (deleteError) {
+    console.error("Error deleting revision:", deleteError)
+  }
+
+  // Return the restored application
+  const restoredApp: Applicant = {
+    id,
+    name: lastRevision.name,
+    address: lastRevision.address,
+    region: lastRevision.region,
+    submissionTime: lastRevision.submission_time,
+    status: lastRevision.status,
+  }
+
+  return restoredApp
 }
 
 // Sort applications by region
 export async function sortByRegion(): Promise<Applicant[]> {
-  const applications = readApplicationsFromFile()
+  const { data, error } = await supabase.from("ktp_applications").select("*").order("region", { ascending: true })
 
-  const sorted = [...applications].sort((a, b) => a.region.localeCompare(b.region))
-  writeApplicationsToFile(sorted)
+  if (error) {
+    console.error("Error sorting by region:", error)
+    return []
+  }
 
-  return sorted
+  return data as Applicant[]
 }
 
 // Sort applications by submission time
 export async function sortByTime(): Promise<Applicant[]> {
-  const applications = readApplicationsFromFile()
+  const { data, error } = await supabase
+    .from("ktp_applications")
+    .select("*")
+    .order("submission_time", { ascending: true })
 
-  const sorted = [...applications].sort((a, b) => a.submissionTime - b.submissionTime)
-  writeApplicationsToFile(sorted)
+  if (error) {
+    console.error("Error sorting by time:", error)
+    return []
+  }
 
-  return sorted
+  return data as Applicant[]
 }
