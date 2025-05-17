@@ -3,7 +3,7 @@
 #include <ctime>
 #include <vector>
 #include <algorithm>
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 #include <curl/curl.h>
 
 using json = nlohmann::json;

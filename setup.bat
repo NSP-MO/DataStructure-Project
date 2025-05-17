@@ -12,7 +12,7 @@ echo SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJz
 
 REM Install Node.js dependencies
 echo Installing Node.js dependencies...
-call npm install @supabase/supabase-js dotenv --legacy-peer-deps
+call npm install @supabase/supabase-js dotenv
 
 REM Create empty data files
 echo Creating empty data files...

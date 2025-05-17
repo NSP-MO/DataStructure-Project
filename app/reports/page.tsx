@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 export default function ReportsPage() {
   const [applications, setApplications] = useState<Applicant[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0])
+  const [selectedDate, setSelectedDate] = useState<string>("")
   const [filteredApps, setFilteredApps] = useState<Applicant[]>([])
 
   useEffect(() => {
@@ -22,8 +22,34 @@ export default function ReportsPage() {
   }, [])
 
   useEffect(() => {
+    // Set initial date after applications are loaded
+    if (applications.length > 0 && !selectedDate) {
+      const dates = applications
+        .map((app) => {
+          const date = new Date(app.submissionTime)
+          return isValidDate(date) ? date.toISOString().split("T")[0] : null
+        })
+        .filter(Boolean) as string[]
+
+      if (dates.length > 0) {
+        // Sort dates and get the most recent
+        const sortedDates = [...dates].sort().reverse()
+        setSelectedDate(sortedDates[0])
+      } else {
+        // If no valid dates, set to today
+        setSelectedDate(new Date().toISOString().split("T")[0])
+      }
+    }
+  }, [applications, selectedDate])
+
+  useEffect(() => {
     filterApplicationsByDate()
   }, [applications, selectedDate])
+
+  // Helper function to check if a date is valid
+  const isValidDate = (date: any): boolean => {
+    return date instanceof Date && !isNaN(date.getTime())
+  }
 
   const loadApplications = async () => {
     setIsLoading(true)
@@ -43,31 +69,51 @@ export default function ReportsPage() {
       return
     }
 
-    const selectedDateObj = new Date(selectedDate)
-    selectedDateObj.setHours(0, 0, 0, 0)
+    try {
+      const selectedDateObj = new Date(selectedDate)
+      if (!isValidDate(selectedDateObj)) {
+        console.error("Invalid selected date:", selectedDate)
+        setFilteredApps([])
+        return
+      }
 
-    const nextDay = new Date(selectedDateObj)
-    nextDay.setDate(nextDay.getDate() + 1)
+      selectedDateObj.setHours(0, 0, 0, 0)
 
-    const filtered = applications.filter((app) => {
-      const appDate = new Date(app.submissionTime)
-      return appDate >= selectedDateObj && appDate < nextDay
-    })
+      const nextDay = new Date(selectedDateObj)
+      nextDay.setDate(nextDay.getDate() + 1)
 
-    setFilteredApps(filtered)
+      const filtered = applications.filter((app) => {
+        try {
+          const appDate = new Date(app.submissionTime)
+          return isValidDate(appDate) && appDate >= selectedDateObj && appDate < nextDay
+        } catch (e) {
+          console.error("Error filtering application:", e)
+          return false
+        }
+      })
+
+      setFilteredApps(filtered)
+    } catch (e) {
+      console.error("Error in filterApplicationsByDate:", e)
+      setFilteredApps([])
+    }
   }
 
   // Get available dates from applications
-  const availableDates = [
-    ...new Set(
-      applications.map((app) => {
+  const availableDates = applications
+    .map((app) => {
+      try {
         const date = new Date(app.submissionTime)
-        return date.toISOString().split("T")[0]
-      }),
-    ),
-  ]
-    .sort()
-    .reverse()
+        return isValidDate(date) ? date.toISOString().split("T")[0] : null
+      } catch (e) {
+        console.error("Error getting date from application:", e)
+        return null
+      }
+    })
+    .filter(Boolean) as string[]
+
+  // Remove duplicates and sort
+  const uniqueDates = [...new Set(availableDates)].sort().reverse()
 
   // Calculate statistics for the selected date
   const totalForDate = filteredApps.length
@@ -90,13 +136,37 @@ export default function ReportsPage() {
 
   // Format date for display
   const formatDateForDisplay = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+    try {
+      const date = new Date(dateString)
+      if (!isValidDate(date)) {
+        return "Invalid Date"
+      }
+
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }
+      return date.toLocaleDateString("id-ID", options)
+    } catch (e) {
+      console.error("Error formatting date:", e)
+      return "Invalid Date"
     }
-    return new Date(dateString).toLocaleDateString("id-ID", options)
+  }
+
+  // Format time for display
+  const formatTimeForDisplay = (timestamp: number) => {
+    try {
+      const date = new Date(timestamp)
+      if (!isValidDate(date)) {
+        return "Invalid Time"
+      }
+      return date.toLocaleTimeString()
+    } catch (e) {
+      console.error("Error formatting time:", e)
+      return "Invalid Time"
+    }
   }
 
   return (
@@ -159,14 +229,14 @@ export default function ReportsPage() {
                       <SelectValue placeholder="Pilih tanggal" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableDates.length > 0 ? (
-                        availableDates.map((date) => (
+                      {uniqueDates.length > 0 ? (
+                        uniqueDates.map((date) => (
                           <SelectItem key={date} value={date}>
                             {formatDateForDisplay(date)}
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>
+                        <SelectItem value="no-data" disabled>
                           Tidak ada data
                         </SelectItem>
                       )}
@@ -307,7 +377,7 @@ export default function ReportsPage() {
                             <td className="py-2 px-4 text-sm">{app.id}</td>
                             <td className="py-2 px-4">{app.name}</td>
                             <td className="py-2 px-4">{app.region}</td>
-                            <td className="py-2 px-4 text-sm">{new Date(app.submissionTime).toLocaleTimeString()}</td>
+                            <td className="py-2 px-4 text-sm">{formatTimeForDisplay(app.submissionTime)}</td>
                             <td className="py-2 px-4">
                               {app.status === "verified" ? (
                                 <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
