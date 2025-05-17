@@ -1,13 +1,13 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { BadgeIcon as IdCard, Users, Clock, Map, FileEdit, RotateCcw, Code } from "lucide-react"
+import { BadgeIcon as IdCard, Clock, Map, BarChart, RefreshCw, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 export const metadata: Metadata = {
-  title: "KTP Online Application System",
-  description: "System for submitting and managing KTP applications",
+  title: "KTP Monitoring Dashboard",
+  description: "Dashboard for monitoring KTP applications",
 }
 
 export default function Home() {
@@ -18,7 +18,7 @@ export default function Home() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <IdCard className="h-8 w-8" />
-              <h1 className="text-2xl font-bold">KTP Online System</h1>
+              <h1 className="text-2xl font-bold">KTP Monitoring Dashboard</h1>
             </div>
             <div>
               <ThemeToggle />
@@ -29,28 +29,19 @@ export default function Home() {
 
       <main className="container mx-auto px-4 py-12 flex-grow">
         <section className="mb-12">
-          <h2 className="text-3xl font-bold mb-6 text-center">Sistem Pengajuan KTP Online</h2>
+          <h2 className="text-3xl font-bold mb-6 text-center">Sistem Monitoring KTP Online</h2>
           <p className="text-muted-foreground text-center max-w-2xl mx-auto">
-            Sistem untuk mengajukan pembuatan/perpanjangan KTP, dengan fitur antrean verifikasi, pengurutan berdasar
-            wilayah/waktu, enkripsi data pemohon, dan riwayat revisi data.
+            Dashboard untuk memantau antrean verifikasi KTP, melihat statistik, dan menganalisis data pengajuan KTP.
           </p>
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
           {[
             {
-              icon: <Users className="h-5 w-5" />,
-              title: "Pengajuan KTP",
-              description: "Ajukan pembuatan atau perpanjangan KTP secara online",
-              content: "Isi formulir dengan data diri lengkap untuk mengajukan KTP baru atau perpanjangan.",
-              link: "/submit",
-              buttonText: "Ajukan Sekarang",
-            },
-            {
               icon: <Clock className="h-5 w-5" />,
               title: "Antrean Verifikasi",
               description: "Lihat status antrean verifikasi KTP",
-              content: "Pantau status pengajuan KTP dan posisi dalam antrean verifikasi.",
+              content: "Pantau status pengajuan KTP dan posisi dalam antrean verifikasi secara real-time.",
               link: "/queue",
               buttonText: "Lihat Antrean",
             },
@@ -58,31 +49,39 @@ export default function Home() {
               icon: <Map className="h-5 w-5" />,
               title: "Pengurutan Data",
               description: "Urutkan data berdasarkan wilayah atau waktu",
-              content: "Fitur pengurutan data berdasarkan wilayah atau waktu pengajuan.",
+              content: "Lihat data pengajuan KTP yang diurutkan berdasarkan wilayah atau waktu pengajuan.",
               link: "/sort",
-              buttonText: "Urutkan Data",
+              buttonText: "Lihat Data",
             },
             {
-              icon: <FileEdit className="h-5 w-5" />,
-              title: "Edit Pengajuan",
-              description: "Edit data pengajuan KTP",
-              content: "Ubah data pengajuan KTP jika terdapat kesalahan atau perubahan.",
-              link: "/edit",
-              buttonText: "Edit Pengajuan",
+              icon: <BarChart className="h-5 w-5" />,
+              title: "Statistik Pengajuan",
+              description: "Lihat statistik pengajuan KTP",
+              content: "Analisis statistik pengajuan KTP berdasarkan wilayah, waktu, dan status verifikasi.",
+              link: "/statistics",
+              buttonText: "Lihat Statistik",
             },
             {
-              icon: <RotateCcw className="h-5 w-5" />,
-              title: "Batalkan Revisi",
-              description: "Batalkan revisi data yang telah dilakukan",
-              content: "Kembalikan data ke versi sebelumnya jika terjadi kesalahan saat revisi.",
-              link: "/undo",
-              buttonText: "Batalkan Revisi",
+              icon: <RefreshCw className="h-5 w-5" />,
+              title: "Status Verifikasi",
+              description: "Pantau status verifikasi KTP",
+              content: "Lihat status verifikasi pengajuan KTP dan persentase penyelesaian.",
+              link: "/status",
+              buttonText: "Lihat Status",
             },
             {
-              icon: <Code className="h-5 w-5" />,
+              icon: <FileText className="h-5 w-5" />,
+              title: "Laporan Harian",
+              description: "Lihat laporan harian pengajuan KTP",
+              content: "Akses laporan harian pengajuan KTP untuk keperluan monitoring dan evaluasi.",
+              link: "/reports",
+              buttonText: "Lihat Laporan",
+            },
+            {
+              icon: <IdCard className="h-5 w-5" />,
               title: "Integrasi C++",
               description: "Integrasi dengan program C++",
-              content: "Panduan untuk menghubungkan aplikasi C++ dengan aplikasi web KTP Online.",
+              content: "Panduan untuk menghubungkan aplikasi C++ dengan dashboard monitoring KTP.",
               link: "/integration",
               buttonText: "Lihat Panduan",
             },
@@ -111,7 +110,7 @@ export default function Home() {
       <footer className="bg-muted py-6 mt-auto">
         <div className="container mx-auto px-4">
           <p className="text-center text-muted-foreground">
-            &copy; {new Date().getFullYear()} KTP Online Application System
+            &copy; {new Date().getFullYear()} KTP Monitoring Dashboard
           </p>
         </div>
       </footer>

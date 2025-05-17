@@ -12,7 +12,7 @@ export default function IntegrationPage() {
           <div className="flex justify-between items-center">
             <Link href="/" className="flex items-center gap-2">
               <ArrowLeft className="h-4 w-4" />
-              <span>Kembali ke Beranda</span>
+              <span>Kembali ke Dashboard</span>
             </Link>
             <ThemeToggle />
           </div>
@@ -22,15 +22,15 @@ export default function IntegrationPage() {
       <div className="container mx-auto px-4 py-12 flex-grow">
         <Card className="max-w-3xl mx-auto">
           <CardHeader>
-            <CardTitle className="text-2xl">Integrasi C++ dengan Web</CardTitle>
-            <CardDescription>Panduan untuk menghubungkan aplikasi C++ dengan aplikasi web KTP Online</CardDescription>
+            <CardTitle className="text-2xl">Integrasi C++ dengan Dashboard</CardTitle>
+            <CardDescription>Panduan untuk menghubungkan aplikasi C++ dengan dashboard monitoring KTP</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Cara Kerja Integrasi</h3>
               <p>
-                Aplikasi C++ dan aplikasi web berbagi data melalui file JSON yang sama. Ketika Anda menambahkan data di
-                aplikasi C++, data tersebut akan tersedia di aplikasi web, dan sebaliknya.
+                Aplikasi C++ digunakan untuk input dan modifikasi data, sementara dashboard web digunakan untuk
+                monitoring dan analisis data. Keduanya berbagi data melalui file JSON yang sama.
               </p>
 
               <div className="bg-muted p-4 rounded-md">
@@ -55,7 +55,7 @@ export default function IntegrationPage() {
               <h3 className="text-lg font-medium">Langkah-langkah Penggunaan</h3>
               <ol className="list-decimal list-inside space-y-3">
                 <li className="space-y-2">
-                  <p>Kompilasi dan jalankan program C++ yang telah dimodifikasi:</p>
+                  <p>Kompilasi dan jalankan program C++ untuk input dan modifikasi data:</p>
                   <div className="bg-muted p-3 rounded-md text-sm font-mono">
                     <p>g++ -std=c++17 ktp_system_modified.cpp -o ktp_system -lnlohmann_json</p>
                     <p>./ktp_system</p>
@@ -65,11 +65,8 @@ export default function IntegrationPage() {
                   </p>
                 </li>
                 <li>Gunakan program C++ untuk menambah, mengedit, atau memverifikasi aplikasi KTP</li>
-                <li>Buka aplikasi web dan lihat data yang sama yang telah Anda masukkan melalui program C++</li>
-                <li>
-                  Anda juga dapat menambah atau mengedit data melalui aplikasi web, dan data tersebut akan tersedia di
-                  program C++
-                </li>
+                <li>Buka dashboard web untuk melihat dan menganalisis data yang telah diinput melalui program C++</li>
+                <li>Dashboard web hanya digunakan untuk monitoring dan tidak dapat memodifikasi data</li>
               </ol>
             </div>
 
@@ -89,7 +86,7 @@ export default function IntegrationPage() {
                   </a>
                   )
                 </li>
-                <li>Node.js dan npm untuk menjalankan aplikasi web</li>
+                <li>Node.js dan npm untuk menjalankan dashboard web</li>
               </ul>
             </div>
 
@@ -97,7 +94,7 @@ export default function IntegrationPage() {
               <Link href="/queue">
                 <Button className="flex items-center gap-2">
                   <Globe className="h-4 w-4" />
-                  Lihat Data di Web
+                  Lihat Data di Dashboard
                 </Button>
               </Link>
               <Link href="/queue">
