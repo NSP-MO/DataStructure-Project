@@ -107,7 +107,6 @@ private:
                     return temp;
                 }
                 BstNode* temp = bstFindMin(node->right);
-                // Salin data inorder successor ke node ini
                 node->applicantIter = temp->applicantIter;
                 node->keyName = temp->keyName;
                 // Hapus inorder successor
