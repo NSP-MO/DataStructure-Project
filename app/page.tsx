@@ -77,14 +77,6 @@ export default function Home() {
               link: "/reports",
               buttonText: "Lihat Laporan",
             },
-            {
-              icon: <IdCard className="h-5 w-5" />,
-              title: "Integrasi C++",
-              description: "Integrasi dengan program C++",
-              content: "Panduan untuk menghubungkan aplikasi C++ dengan dashboard monitoring KTP.",
-              link: "/integration",
-              buttonText: "Lihat Panduan",
-            },
           ].map((item, index) => (
             <Card key={index} className="flex flex-col h-full">
               <CardHeader>
