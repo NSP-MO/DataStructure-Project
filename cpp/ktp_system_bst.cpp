@@ -326,7 +326,7 @@ int main() {
     KtpSystem system;
 
     while (true) {
-        cout << "\n=== Sistem Manajemen KTP (Terhubung Supabase) ==="
+        cout << "\n=== Sistem Manajemen KTP (Berbasis Web) ==="
              << "\n1. Ajukan Aplikasi Baru"
              << "\n2. Proses Verifikasi"
              << "\n3. Edit Aplikasi"

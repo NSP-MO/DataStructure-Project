@@ -1,4 +1,5 @@
 region1-1747471224|name1|address1|region1|1747471224|pending
+Kalimantan Timur-1750288923|Melisa Putri|Jl. Ahmad Yani No. 14, Balikpapan|Kalimantan Timur|1750288923|pending
 JAKARTA-1684123456|Budi Santoso|Jl. Sudirman No. 123|JAKARTA|1684123456000|pending
 BANDUNG-1684234567|Siti Rahayu|Jl. Asia Afrika No. 45|BANDUNG|1684234567000|verified
 SURABAYA-1684345678|Ahmad Hidayat|Jl. Pemuda No. 67|SURABAYA|1684345678000|pending
