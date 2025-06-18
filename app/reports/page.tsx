@@ -28,26 +28,50 @@ export default function ReportsPage() {
   }, [])
 
   useEffect(() => {
-    // Set initial date after applications are loaded
-    if (applications.length > 0 && !selectedDate) {
-      const today = new Date().toISOString().split("T")[0]
-      setSelectedDate(today)
+    // Set initial date to today after applications are loaded
+    if (!selectedDate) {
+      const today = new Date()
+      setSelectedDate(today.toISOString().split("T")[0])
     }
-  }, [applications, selectedDate])
+  }, [selectedDate])
 
   useEffect(() => {
     filterDailyActivities()
   }, [applications, selectedDate])
 
-  // Helper function to check if a date is valid
-  const isValidDate = (date: any): boolean => {
-    return date instanceof Date && !isNaN(date.getTime())
+  // Helper function to safely create and validate dates
+  const createSafeDate = (timestamp: number | string | Date): Date | null => {
+    try {
+      let date: Date
+
+      if (typeof timestamp === "number") {
+        // Handle both milliseconds and seconds timestamps
+        date = timestamp > 1000000000000 ? new Date(timestamp) : new Date(timestamp * 1000)
+      } else if (typeof timestamp === "string") {
+        date = new Date(timestamp)
+      } else if (timestamp instanceof Date) {
+        date = timestamp
+      } else {
+        return null
+      }
+
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return null
+      }
+
+      return date
+    } catch (error) {
+      console.error("Error creating date:", error)
+      return null
+    }
   }
 
   const loadApplications = async () => {
     setIsLoading(true)
     try {
       const apps = await getApplications()
+      console.log("Loaded applications:", apps)
       setApplications(apps)
     } catch (error) {
       console.error("Error loading applications:", error)
@@ -57,72 +81,59 @@ export default function ReportsPage() {
   }
 
   const filterDailyActivities = () => {
-    if (!selectedDate) {
+    if (!selectedDate || applications.length === 0) {
       setDailyActivities([])
       return
     }
 
     try {
       const selectedDateObj = new Date(selectedDate)
-      if (!isValidDate(selectedDateObj)) {
-        console.error("Invalid selected date:", selectedDate)
-        setDailyActivities([])
-        return
-      }
-
       selectedDateObj.setHours(0, 0, 0, 0)
+
       const nextDay = new Date(selectedDateObj)
       nextDay.setDate(nextDay.getDate() + 1)
+
+      console.log("Filtering for date range:", selectedDateObj, "to", nextDay)
 
       const activities: DailyActivity[] = []
 
       applications.forEach((app) => {
-        try {
-          // Check if submitted on this date
-          const submissionDate = new Date(app.submissionTime)
-          if (isValidDate(submissionDate) && submissionDate >= selectedDateObj && submissionDate < nextDay) {
+        // Check submission time
+        const submissionDate = createSafeDate(app.submissionTime)
+        if (submissionDate && submissionDate >= selectedDateObj && submissionDate < nextDay) {
+          activities.push({
+            application: app,
+            activityType: "submitted",
+            activityTime: submissionDate.getTime(),
+          })
+        }
+
+        // For revision status, consider it as a modification activity
+        if (app.status === "revision") {
+          const modificationDate = createSafeDate(app.submissionTime)
+          if (modificationDate && modificationDate >= selectedDateObj && modificationDate < nextDay) {
             activities.push({
               application: app,
-              activityType: "submitted",
-              activityTime: app.submissionTime,
+              activityType: "modified",
+              activityTime: modificationDate.getTime(),
             })
           }
+        }
 
-          // Check if modified on this date (for revision status)
-          if (app.status === "revision") {
-            // For revision status, we assume it was modified recently
-            // In a real system, you'd have a lastModified timestamp
-            const modificationTime = app.submissionTime + Math.random() * 86400000 // Simulate modification time
-            const modificationDate = new Date(modificationTime)
-
-            if (isValidDate(modificationDate) && modificationDate >= selectedDateObj && modificationDate < nextDay) {
-              activities.push({
-                application: app,
-                activityType: "modified",
-                activityTime: modificationTime,
-              })
-            }
+        // For verified status, consider it as a verification activity
+        if (app.status === "verified") {
+          const verificationDate = createSafeDate(app.submissionTime)
+          if (verificationDate && verificationDate >= selectedDateObj && verificationDate < nextDay) {
+            activities.push({
+              application: app,
+              activityType: "verified",
+              activityTime: verificationDate.getTime(),
+            })
           }
-
-          // Check if verified on this date
-          if (app.status === "verified") {
-            // For verified status, we assume it was verified recently
-            // In a real system, you'd have a verificationTime timestamp
-            const verificationTime = app.submissionTime + Math.random() * 172800000 // Simulate verification time
-            const verificationDate = new Date(verificationTime)
-
-            if (isValidDate(verificationDate) && verificationDate >= selectedDateObj && verificationDate < nextDay) {
-              activities.push({
-                application: app,
-                activityType: "verified",
-                activityTime: verificationTime,
-              })
-            }
-          }
-        } catch (e) {
-          console.error("Error processing application activity:", e)
         }
       })
+
+      console.log("Found activities:", activities)
 
       // Sort activities by time (most recent first)
       activities.sort((a, b) => b.activityTime - a.activityTime)
@@ -133,18 +144,27 @@ export default function ReportsPage() {
     }
   }
 
-  // Get available dates from activities (last 30 days)
+  // Get available dates from applications (last 30 days + dates with actual data)
   const getAvailableDates = () => {
-    const dates: string[] = []
-    const today = new Date()
+    const dates = new Set<string>()
 
+    // Add last 30 days
+    const today = new Date()
     for (let i = 0; i < 30; i++) {
       const date = new Date(today)
       date.setDate(date.getDate() - i)
-      dates.push(date.toISOString().split("T")[0])
+      dates.add(date.toISOString().split("T")[0])
     }
 
-    return dates
+    // Add dates from actual application data
+    applications.forEach((app) => {
+      const appDate = createSafeDate(app.submissionTime)
+      if (appDate) {
+        dates.add(appDate.toISOString().split("T")[0])
+      }
+    })
+
+    return Array.from(dates).sort().reverse()
   }
 
   const availableDates = getAvailableDates()
@@ -168,11 +188,7 @@ export default function ReportsPage() {
   // Format date for display
   const formatDateForDisplay = (dateString: string) => {
     try {
-      const date = new Date(dateString)
-      if (!isValidDate(date)) {
-        return "Invalid Date"
-      }
-
+      const date = new Date(dateString + "T00:00:00")
       const options: Intl.DateTimeFormatOptions = {
         weekday: "long",
         year: "numeric",
@@ -182,16 +198,16 @@ export default function ReportsPage() {
       return date.toLocaleDateString("id-ID", options)
     } catch (e) {
       console.error("Error formatting date:", e)
-      return "Invalid Date"
+      return dateString
     }
   }
 
   // Format time for display
   const formatTimeForDisplay = (timestamp: number) => {
     try {
-      const date = new Date(timestamp)
-      if (!isValidDate(date)) {
-        return "Invalid Time"
+      const date = createSafeDate(timestamp)
+      if (!date) {
+        return "Waktu tidak valid"
       }
       return date.toLocaleTimeString("id-ID", {
         hour: "2-digit",
@@ -200,7 +216,28 @@ export default function ReportsPage() {
       })
     } catch (e) {
       console.error("Error formatting time:", e)
-      return "Invalid Time"
+      return "Waktu tidak valid"
+    }
+  }
+
+  // Format full date and time for display
+  const formatFullDateTime = (timestamp: number) => {
+    try {
+      const date = createSafeDate(timestamp)
+      if (!date) {
+        return "Tanggal tidak valid"
+      }
+      return date.toLocaleString("id-ID", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    } catch (e) {
+      console.error("Error formatting full date time:", e)
+      return "Tanggal tidak valid"
     }
   }
 
@@ -227,6 +264,24 @@ export default function ReportsPage() {
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">Verifikasi</Badge>
       default:
         return <Badge variant="outline">Aktivitas</Badge>
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "verified":
+        return (
+          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">Terverifikasi</Badge>
+        )
+      case "revision":
+        return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">Dalam Revisi</Badge>
+      case "pending":
+      default:
+        return (
+          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
+            Menunggu Verifikasi
+          </Badge>
+        )
     }
   }
 
@@ -268,12 +323,23 @@ export default function ReportsPage() {
                 className="flex items-center gap-2"
                 disabled={dailyActivities.length === 0}
                 onClick={() => {
-                  // In a real app, this would generate and download a CSV/PDF
-                  alert("Fitur download laporan akan diimplementasikan di versi selanjutnya")
+                  const csvContent = dailyActivities
+                    .map(
+                      (activity) =>
+                        `${formatFullDateTime(activity.activityTime)},${activity.application.id},${activity.application.name},${activity.application.region},${getActivityTypeLabel(activity.activityType)},${activity.application.status}`,
+                    )
+                    .join("\n")
+                  const blob = new Blob([`Waktu,ID,Nama,Wilayah,Aktivitas,Status\n${csvContent}`], { type: "text/csv" })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement("a")
+                  a.href = url
+                  a.download = `laporan-harian-${selectedDate}.csv`
+                  a.click()
+                  URL.revokeObjectURL(url)
                 }}
               >
                 <Download className="h-4 w-4" />
-                Download Laporan
+                Download CSV
               </Button>
             </div>
           </div>
@@ -311,12 +377,6 @@ export default function ReportsPage() {
             <div className="flex justify-center items-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : dailyActivities.length === 0 ? (
-            <Card>
-              <CardContent className="py-10">
-                <p className="text-center text-muted-foreground">Tidak ada aktivitas pada tanggal yang dipilih</p>
-              </CardContent>
-            </Card>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
@@ -326,6 +386,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold">{totalActivities}</div>
+                    <p className="text-xs text-muted-foreground mt-1">{applications.length} total aplikasi</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -400,52 +461,52 @@ export default function ReportsPage() {
                 <CardHeader>
                   <CardTitle>Riwayat Aktivitas</CardTitle>
                   <CardDescription>
-                    Daftar aktivitas pada tanggal yang dipilih (diurutkan berdasarkan waktu terbaru)
+                    {dailyActivities.length > 0
+                      ? `Daftar ${dailyActivities.length} aktivitas pada tanggal yang dipilih (diurutkan berdasarkan waktu terbaru)`
+                      : "Tidak ada aktivitas pada tanggal yang dipilih"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 px-4">Waktu</th>
-                          <th className="text-left py-2 px-4">ID Aplikasi</th>
-                          <th className="text-left py-2 px-4">Nama</th>
-                          <th className="text-left py-2 px-4">Wilayah</th>
-                          <th className="text-left py-2 px-4">Jenis Aktivitas</th>
-                          <th className="text-left py-2 px-4">Status Saat Ini</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dailyActivities.map((activity, index) => (
-                          <tr key={`${activity.application.id}-${activity.activityType}-${index}`} className="border-b">
-                            <td className="py-2 px-4 text-sm font-mono">
-                              {formatTimeForDisplay(activity.activityTime)}
-                            </td>
-                            <td className="py-2 px-4 text-sm">{activity.application.id}</td>
-                            <td className="py-2 px-4">{activity.application.name}</td>
-                            <td className="py-2 px-4">{activity.application.region}</td>
-                            <td className="py-2 px-4">{getActivityTypeBadge(activity.activityType)}</td>
-                            <td className="py-2 px-4">
-                              {activity.application.status === "verified" ? (
-                                <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
-                                  Terverifikasi
-                                </Badge>
-                              ) : activity.application.status === "revision" ? (
-                                <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                                  Dalam Revisi
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
-                                  Menunggu Verifikasi
-                                </Badge>
-                              )}
-                            </td>
+                  {dailyActivities.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">
+                        Tidak ada aktivitas pada tanggal {formatDateForDisplay(selectedDate)}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">Coba pilih tanggal lain atau refresh data</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2 px-4">Waktu</th>
+                            <th className="text-left py-2 px-4">ID Aplikasi</th>
+                            <th className="text-left py-2 px-4">Nama</th>
+                            <th className="text-left py-2 px-4">Wilayah</th>
+                            <th className="text-left py-2 px-4">Jenis Aktivitas</th>
+                            <th className="text-left py-2 px-4">Status Saat Ini</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {dailyActivities.map((activity, index) => (
+                            <tr
+                              key={`${activity.application.id}-${activity.activityType}-${index}`}
+                              className="border-b hover:bg-muted/50"
+                            >
+                              <td className="py-2 px-4 text-sm font-mono">
+                                {formatTimeForDisplay(activity.activityTime)}
+                              </td>
+                              <td className="py-2 px-4 text-sm font-mono">{activity.application.id}</td>
+                              <td className="py-2 px-4">{activity.application.name}</td>
+                              <td className="py-2 px-4">{activity.application.region}</td>
+                              <td className="py-2 px-4">{getActivityTypeBadge(activity.activityType)}</td>
+                              <td className="py-2 px-4">{getStatusBadge(activity.application.status)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>
