@@ -179,7 +179,6 @@ private:
     }
 
     string findProjectRoot() {
-        // Asumsi executable berada di direktori 'build' dan root proyek adalah satu level di atas
         fs::path currentPath = fs::current_path();
         if (currentPath.filename() == "build") {
             return currentPath.parent_path().string();
@@ -193,9 +192,9 @@ private:
 
         cout << "Memuat data aplikasi dari database..." << endl;
         system(("node \"" + projectRoot + "/scripts/sync_data.js\"").c_str());
-        readResponse(); // Baca respons dari sync_data.js
+        readResponse();
 
-        ifstream file(outputFilePath); // outputFilePath adalah ktp_applications_sync.txt
+        ifstream file(outputFilePath);
         if (!file.is_open()) {
             cerr << "Tidak dapat membuka file data aplikasi: " << outputFilePath << endl;
             return;
@@ -258,7 +257,6 @@ public:
     void submitApplication(const string& name, const string& address, const string& region) {
         string id = generateId(region);
         time_t now = time(nullptr);
-        // Format data untuk skrip Node.js: command|id|name|address|region|submissionTime
         stringstream ss;
         ss << id << DELIMITER << name << DELIMITER << address << DELIMITER << region << DELIMITER << now << DELIMITER << "pending";
         writeCommand("submit", ss.str());
