@@ -1,335 +1,435 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <sstream>    
 #include <ctime>
 #include <unordered_map>
+#include <list>
 #include <vector>
 #include <algorithm>
-#include <nlohmann/json.hpp> // External library for JSON
-#include <filesystem> // For directory creation
+#include <filesystem> 
+#include <limits>     
 
-// Namespace for filesystem operations
 namespace fs = std::filesystem;
-using json = nlohmann::json; // Alias for nlohmann::json
 using namespace std;
 
-// Structure to hold applicant data
+// Struktur untuk menyimpan data pemohon
 struct Applicant {
     string id;
     string name;
     string address;
     string region;
-    time_t submissionTime; // Unix timestamp
-    string status;         // e.g., "pending", "verified", "revision"
+    time_t submissionTime;
+    string status;
+
+    bool operator<(const Applicant& other) const {
+        return name < other.name;
+    }
 };
 
-// Class to manage KTP applications
+// Memecah string berdasarkan delimiter
+vector<string> split(const string& s, char delimiter) {
+    vector<string> tokens;
+    string token;
+    istringstream tokenStream(s);
+    while (getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+// Struktur untuk Node BST
+struct BstNode {
+    list<Applicant>::iterator applicantIter; // Iterator ke Applicant di applicationQueue
+    string keyName; // Nama pemohon sebagai kunci BST
+    BstNode *left;
+    BstNode *right;
+
+    BstNode(list<Applicant>::iterator iter)
+        : applicantIter(iter), keyName(iter->name), left(nullptr), right(nullptr) {}
+};
+
+// Kelas untuk mengelola aplikasi KTP
 class KtpSystem {
 private:
-    vector<Applicant> applications; // Main list of applications
-    unordered_map<string, vector<Applicant>> revisionStack; // Stores previous versions of applications for undo
-    string dataFilePath;        // Path to the applications JSON file
-    string revisionFilePath;    // Path to the revisions JSON file
+    list<Applicant> applicationQueue; // Linked List (FIFO)
+    unordered_map<string, list<Applicant>::iterator> applicationMap; // Hash Table (ID -> Iterator)
+    BstNode* bstRootByName; // Root dari Binary Search Tree berdasarkan nama
 
-    // Generates a unique ID for an applicant based on region and current time
+    unordered_map<string, vector<Applicant>> revisionStack;
+    string dataFilePath;
+    string revisionFilePath;
+    string projectRoot;
+    const char DELIMITER = '\t';
+
+    // --- Operasi BST ---
+    BstNode* bstInsert(BstNode* node, list<Applicant>::iterator appIter) {
+        if (node == nullptr) {
+            return new BstNode(appIter);
+        }
+        if (appIter->name < node->keyName) {
+            node->left = bstInsert(node->left, appIter);
+        } else { // appIter->name >= node->keyName
+            node->right = bstInsert(node->right, appIter);
+        }
+        return node;
+    }
+
+    BstNode* bstFindMin(BstNode* node) {
+        while (node != nullptr && node->left != nullptr) {
+            node = node->left;
+        }
+        return node;
+    }
+    
+    // Menghapus node BST yang spesifik berdasarkan iteratornya (untuk nama yang sama tapi iterator berbeda)
+    BstNode* bstRemove(BstNode* node, const string& nameToRemove, list<Applicant>::iterator iterToRemove) {
+        if (node == nullptr) {
+            return nullptr;
+        }
+
+        if (nameToRemove < node->keyName) {
+            node->left = bstRemove(node->left, nameToRemove, iterToRemove);
+        } else if (nameToRemove > node->keyName) {
+            node->right = bstRemove(node->right, nameToRemove, iterToRemove);
+        } else {
+            if (node->applicantIter == iterToRemove) {
+                if (node->left == nullptr && node->right == nullptr) {
+                    delete node;
+                    return nullptr;
+                } else if (node->left == nullptr) {
+                    BstNode* temp = node->right;
+                    delete node;
+                    return temp;
+                } else if (node->right == nullptr) {
+                    BstNode* temp = node->left;
+                    delete node;
+                    return temp;
+                }
+                BstNode* temp = bstFindMin(node->right);
+                node->applicantIter = temp->applicantIter;
+                node->keyName = temp->keyName;
+                // Hapus inorder successor
+                node->right = bstRemove(node->right, temp->keyName, temp->applicantIter);
+            } else { // Nama sama tapi iterator beda, cari di sub-pohon kanan
+                node->right = bstRemove(node->right, nameToRemove, iterToRemove);
+            }
+        }
+        return node;
+    }
+
+
+    void bstInOrderTraversal(BstNode* node, vector<list<Applicant>::iterator>& result) {
+        if (node != nullptr) {
+            bstInOrderTraversal(node->left, result);
+            result.push_back(node->applicantIter);
+            bstInOrderTraversal(node->right, result);
+        }
+    }
+
+    void bstClear(BstNode* node) {
+        if (node == nullptr) {
+            return;
+        }
+        bstClear(node->left);
+        bstClear(node->right);
+        delete node;
+    }
+    // --- Akhir Operasi BST ---
+
+
     string generateId(const string& region) {
         return region + "-" + to_string(time(nullptr));
     }
 
-    // Ensures the 'data' directory exists, creates it if not
     void ensureDataDir() {
-        fs::path dataDir = fs::path("data");
+        fs::path dataDir = fs::path(projectRoot) / "data";
         if (!fs::exists(dataDir)) {
             try {
                 fs::create_directories(dataDir);
-                cout << "Data directory created at 'data/'" << endl;
+                cout << "Direktori data dibuat di 'data/'" << endl;
             } catch (const fs::filesystem_error& e) {
-                cerr << "Error creating data directory: " << e.what() << endl;
+                cerr << "Error membuat direktori data: " << e.what() << endl;
             }
         }
     }
 
-    // Loads applications from the JSON file into the 'applications' vector
     void loadApplicationsFromFile() {
-        ensureDataDir(); // Make sure 'data' directory exists
-        applications.clear(); // Clear existing in-memory applications
-        
+        ensureDataDir();
+        applicationQueue.clear();
+        applicationMap.clear();
+        bstClear(bstRootByName);
+        bstRootByName = nullptr;
+
+
         ifstream file(dataFilePath);
         if (!file.is_open()) {
-            // If file doesn't exist or can't be opened, assume no data yet
-            cout << "Applications file '" << dataFilePath << "' not found. Starting with an empty list." << endl;
+            cout << "File aplikasi '" << dataFilePath << "' tidak ditemukan. Memulai dengan daftar kosong." << endl;
             return;
         }
-        
-        try {
-            json data = json::parse(file); // Parse the JSON from file
-            for (const auto& item : data) {
+
+        string line;
+        while (getline(file, line)) {
+            vector<string> tokens = split(line, DELIMITER);
+            if (tokens.size() == 6) {
                 Applicant app;
-                app.id = item.value("id", "");
-                app.name = item.value("name", "");
-                app.address = item.value("address", "");
-                app.region = item.value("region", "");
-                app.submissionTime = item.value("submissionTime", time_t(0));
-                app.status = item.value("status", "pending");
-                applications.push_back(app);
+                app.id = tokens[0];
+                app.name = tokens[1];
+                app.address = tokens[2];
+                app.region = tokens[3];
+                try {
+                    app.submissionTime = stoll(tokens[4]);
+                } catch (const std::exception& e) {
+                    cerr << "Format submissionTime tidak valid untuk ID " << app.id << ": " << tokens[4] << endl;
+                    app.submissionTime = time(nullptr);
+                }
+                app.status = tokens[5];
+
+                applicationQueue.push_back(app);
+                list<Applicant>::iterator currentIter = prev(applicationQueue.end());
+                applicationMap[app.id] = currentIter;
+                bstRootByName = bstInsert(bstRootByName, currentIter); // Tambahkan ke BST
+            } else {
+                cerr << "Baris tidak valid di file aplikasi: " << line << endl;
             }
-            cout << "Loaded " << applications.size() << " applications from '" << dataFilePath << "'" << endl;
-        } catch (const json::parse_error& e) {
-            cerr << "Error parsing applications file '" << dataFilePath << "': " << e.what() << ". Starting with an empty list." << endl;
-            applications.clear(); // Ensure list is empty if parsing fails
-        } catch (const exception& e) {
-            cerr << "An unexpected error occurred while loading applications: " << e.what() << endl;
-            applications.clear();
         }
+        cout << "Memuat " << applicationQueue.size() << " aplikasi dari '" << dataFilePath << "'" << endl;
         file.close();
     }
 
-    // Saves the current 'applications' vector to the JSON file
     void saveApplicationsToFile() {
-        ensureDataDir(); // Make sure 'data' directory exists
-        
-        json data = json::array(); // Create a JSON array
-        for (const auto& app : applications) {
-            json item;
-            item["id"] = app.id;
-            item["name"] = app.name;
-            item["address"] = app.address;
-            item["region"] = app.region;
-            item["submissionTime"] = app.submissionTime;
-            item["status"] = app.status;
-            data.push_back(item); // Add each applicant to the JSON array
-        }
-        
+        ensureDataDir();
         ofstream file(dataFilePath);
-        if (file.is_open()) {
-            file << data.dump(2); // Write JSON data to file, pretty-printed with indent 2
-            cout << "Saved " << applications.size() << " applications to '" << dataFilePath << "'" << endl;
-        } else {
-            cerr << "Could not open file for writing: " << dataFilePath << endl;
-        }
-        file.close();
-    }
-
-    // Loads revision history from the JSON file into 'revisionStack'
-    void loadRevisionsFromFile() {
-        ensureDataDir(); // Make sure 'data' directory exists
-        revisionStack.clear(); // Clear existing in-memory revisions
-        
-        ifstream file(revisionFilePath);
         if (!file.is_open()) {
-             // If file doesn't exist or can't be opened, assume no revisions yet
-            cout << "Revisions file '" << revisionFilePath << "' not found. Starting with no revision history." << endl;
+            cerr << "Tidak bisa membuka file untuk menulis: " << dataFilePath << endl;
             return;
         }
-        
-        try {
-            json data = json::parse(file); // Parse the JSON from file
-            for (auto& [id, revisions_json] : data.items()) { // Iterate through each application ID in the JSON object
-                vector<Applicant> appRevisions;
-                for (const auto& item : revisions_json) { // Iterate through revisions for that ID
+
+        for (const auto& app : applicationQueue) {
+            file << app.id << DELIMITER
+                 << app.name << DELIMITER
+                 << app.address << DELIMITER
+                 << app.region << DELIMITER
+                 << app.submissionTime << DELIMITER
+                 << app.status << endl;
+        }
+        cout << "Menyimpan " << applicationQueue.size() << " aplikasi ke '" << dataFilePath << "'" << endl;
+        file.close();
+    }
+
+    void loadRevisionsFromFile() {
+        ensureDataDir();
+        revisionStack.clear();
+        ifstream file(revisionFilePath);
+        if (!file.is_open()) { cout << "File revisi tidak ditemukan." << endl; 
+            return; 
+        }
+        string line;
+        while (getline(file, line)) {
+            string originalAppId = line;
+            if (!getline(file, line)) break;
+            int revisionCount;
+            try { revisionCount = stoi(line); } catch (const std::exception&) { continue; }
+            vector<Applicant> appRevisions;
+            for (int i = 0; i < revisionCount; ++i) {
+                if (!getline(file, line)) break;
+                vector<string> tokens = split(line, DELIMITER);
+                if (tokens.size() == 6) {
                     Applicant app;
-                    app.id = item.value("id", "");
-                    app.name = item.value("name", "");
-                    app.address = item.value("address", "");
-                    app.region = item.value("region", "");
-                    app.submissionTime = item.value("submissionTime", time_t(0));
-                    app.status = item.value("status", "pending");
+                    app.id = tokens[0]; app.name = tokens[1]; app.address = tokens[2];
+                    app.region = tokens[3];
+                    try { app.submissionTime = stoll(tokens[4]); } catch (const std::exception&) { app.submissionTime = time(nullptr); }
+                    app.status = tokens[5];
                     appRevisions.push_back(app);
                 }
-                revisionStack[id] = appRevisions; // Store the vector of revisions for the ID
             }
-             cout << "Loaded revision history for " << revisionStack.size() << " applications from '" << revisionFilePath << "'" << endl;
-        } catch (const json::parse_error& e) {
-            cerr << "Error parsing revisions file '" << revisionFilePath << "': " << e.what() << ". Starting with no revision history." << endl;
-            revisionStack.clear();
-        } catch (const exception& e) {
-            cerr << "An unexpected error occurred while loading revisions: " << e.what() << endl;
-            revisionStack.clear();
+            if (!appRevisions.empty() || revisionCount == 0) { revisionStack[originalAppId] = appRevisions; }
         }
         file.close();
     }
 
-    // Saves the current 'revisionStack' to the JSON file
     void saveRevisionsToFile() {
-        ensureDataDir(); // Make sure 'data' directory exists
-        
-        json data = json::object(); // Create a JSON object
-        for (const auto& [id, revisions_vec] : revisionStack) {
-            json revArray = json::array(); // Create a JSON array for revisions of one applicant
-            for (const auto& app : revisions_vec) {
-                json item;
-                item["id"] = app.id;
-                item["name"] = app.name;
-                item["address"] = app.address;
-                item["region"] = app.region;
-                item["submissionTime"] = app.submissionTime;
-                item["status"] = app.status;
-                revArray.push_back(item);
-            }
-            data[id] = revArray; // Add the array of revisions to the main JSON object with applicant ID as key
-        }
-        
+        ensureDataDir();
         ofstream file(revisionFilePath);
-        if (file.is_open()) {
-            file << data.dump(2); // Write JSON data to file, pretty-printed
-            cout << "Saved revision history for " << revisionStack.size() << " applications to '" << revisionFilePath << "'" << endl;
-        } else {
-            cerr << "Could not open file for writing: " << revisionFilePath << endl;
+        if (!file.is_open()) { 
+            cerr << "Tidak bisa membuka file revisi." << endl; 
+            return; 
+        }
+        for (const auto& pair : revisionStack) {
+            file << pair.first << endl;
+            file << pair.second.size() << endl;
+            for (const auto& app : pair.second) {
+                file << app.id << DELIMITER << app.name << DELIMITER << app.address << DELIMITER
+                     << app.region << DELIMITER << app.submissionTime << DELIMITER << app.status << endl;
+            }
         }
         file.close();
+    }
+    
+    void rebuildMap() {
+        applicationMap.clear();
+        for (auto it = applicationQueue.begin(); it != applicationQueue.end(); ++it) {
+            applicationMap[it->id] = it;
+        }
     }
 
 public:
-    // Constructor: initializes file paths and loads data from files
-    KtpSystem() {
-        projectRoot = fs::current_path().string(); // Assuming the executable is run from the project root
-        dataFilePath = projectRoot + "/data/ktp_applications.json";
-        revisionFilePath = projectRoot + "/data/ktp_revisions.json";
-        
-        cout << "KTP System Initializing..." << endl;
-        cout << "Application data file: " << dataFilePath << endl;
-        cout << "Revision data file: " << revisionFilePath << endl;
-        
+    KtpSystem() : bstRootByName(nullptr) {
+        projectRoot = fs::current_path().string();
+        dataFilePath = (fs::path(projectRoot) / "data" / "ktp_applications.txt").string();
+        revisionFilePath = (fs::path(projectRoot) / "data" / "ktp_revisions.txt").string();
+
+        cout << "Inisialisasi Sistem KTP..." << endl;
         loadApplicationsFromFile();
         loadRevisionsFromFile();
-        cout << "KTP System Initialized." << endl;
+        cout << "Sistem KTP Diinisialisasi." << endl;
     }
-    
-    string projectRoot; // Added to store the project root
 
-    // Submits a new application
+    ~KtpSystem() {
+        bstClear(bstRootByName);
+    }
+
     void submitApplication(const string& name, const string& address, const string& region) {
         Applicant newApp;
         newApp.id = generateId(region);
         newApp.name = name;
         newApp.address = address;
         newApp.region = region;
-        newApp.submissionTime = time(nullptr); // Current time as submission time
-        newApp.status = "pending";             // Default status
+        newApp.submissionTime = time(nullptr);
+        newApp.status = "pending";
 
-        applications.push_back(newApp); // Add to in-memory list
-        saveApplicationsToFile();       // Save updated list to file
-        
-        cout << "Application submitted successfully. ID: " << newApp.id << endl;
+        applicationQueue.push_back(newApp);
+        list<Applicant>::iterator currentIter = prev(applicationQueue.end());
+        applicationMap[newApp.id] = currentIter;
+        bstRootByName = bstInsert(bstRootByName, currentIter);
+
+        saveApplicationsToFile();
+        cout << "Aplikasi berhasil diajukan. ID: " << newApp.id << endl;
     }
 
-    // Processes verification for an application
     void processVerification(const string& id) {
-        auto it = find_if(applications.begin(), applications.end(), 
-                         [&id](const Applicant& app) { return app.id == id; });
-        
-        if (it == applications.end()) {
-            cout << "Application with ID '" << id << "' not found.\n";
+        auto map_it = applicationMap.find(id);
+        if (map_it == applicationMap.end()) {
+            cout << "Aplikasi dengan ID '" << id << "' tidak ditemukan.\n";
             return;
         }
-        
-        if (it->status == "verified") {
-            cout << "Application with ID '" << id << "' is already verified.\n";
-            return;
+        auto app_it = map_it->second;
+        if (app_it->status == "verified") { cout << "Aplikasi sudah diverifikasi.\n";
+            return; 
         }
-
-        it->status = "verified";    // Change status
-        saveApplicationsToFile();   // Save changes
-        cout << "Application '" << id << "' has been verified.\n";
+        app_it->status = "verified";
+        saveApplicationsToFile();
+        cout << "Aplikasi '" << id << "' telah diverifikasi.\n";
     }
 
-    // Edits an existing application
-    void editApplication(const string& id, const string& newName, 
+    void editApplication(const string& id, const string& newName,
                          const string& newAddress, const string& newRegion) {
-        auto it = find_if(applications.begin(), applications.end(), 
-                         [&id](const Applicant& app) { return app.id == id; });
-        
-        if (it == applications.end()) {
-            cout << "Application with ID '" << id << "' not found.\n";
+        auto map_it = applicationMap.find(id);
+        if (map_it == applicationMap.end()) {
+            cout << "Aplikasi dengan ID '" << id << "' tidak ditemukan.\n";
             return;
         }
+        auto app_it = map_it->second;
+        string oldName = app_it->name;
 
-        // Push current state to revision stack before modifying
-        revisionStack[id].push_back(*it); // revisionStack is an unordered_map
-        saveRevisionsToFile();            // Save updated revision history
-
-        // Update application details
-        it->name = newName;
-        it->address = newAddress;
-        it->region = newRegion;
-        it->status = "revision"; // Set status to 'revision' after edit
-        saveApplicationsToFile();   // Save updated application list
+        revisionStack[id].push_back(*app_it);
         
-        cout << "Application updated. ID: " << id << " (Status: revision)\n";
+        if (oldName != newName) {
+             bstRootByName = bstRemove(bstRootByName, oldName, app_it);
+        }
+
+        app_it->name = newName;
+        app_it->address = newAddress;
+        app_it->region = newRegion;
+        app_it->status = "revision";
+        
+        if (oldName != newName) {bstRootByName = bstInsert(bstRootByName, app_it);
+        } else if (bstRootByName != nullptr && app_it->name == oldName) {}
+
+
+        saveApplicationsToFile();
+        saveRevisionsToFile();
+        cout << "Aplikasi diperbarui. ID: " << id << " (Status: revision)\n";
     }
 
-    // Undoes the last revision for an application
     void undoRevision(const string& id) {
-        // Check if there are any revisions for this ID
         if (revisionStack.find(id) == revisionStack.end() || revisionStack[id].empty()) {
-            cout << "No revision available to undo for application ID '" << id << "'.\n";
+            cout << "Tidak ada revisi untuk dibatalkan.\n";
             return;
         }
-
-        // Find the current application in the main list
-        auto it = find_if(applications.begin(), applications.end(), 
-                         [&id](const Applicant& app) { return app.id == id; });
-        
-        if (it == applications.end()) {
-            // This case should ideally not happen if a revision exists,
-            // but good to handle.
-            cout << "Application with ID '" << id << "' not found in the main list, cannot undo revision.\n";
-            return;
+        auto map_it = applicationMap.find(id);
+        if (map_it == applicationMap.end()) { 
+            cout << "Aplikasi tidak ditemukan.\n";  
+            return; 
         }
 
-        // Get the last revision from the stack for this ID
+        auto app_it = map_it->second;
+        string nameBeforeUndo = app_it->name;
+
         Applicant lastRevision = revisionStack[id].back();
-        revisionStack[id].pop_back(); // Remove the last revision from the stack
-         if (revisionStack[id].empty()) {
-            revisionStack.erase(id); // If no more revisions for this ID, remove the key
+        revisionStack[id].pop_back();
+        if (revisionStack[id].empty()) {
+            revisionStack.erase(id);
         }
-        saveRevisionsToFile(); // Save the updated revision stack
-
-        // Restore the application details from the last revision
-        *it = lastRevision;
-        saveApplicationsToFile(); // Save the restored application to the main list
         
-        cout << "Revision undone for application '" << id << "'. Restored to previous state.\n";
+        // Update BST jika nama berubah
+        if (nameBeforeUndo != lastRevision.name) {
+            bstRootByName = bstRemove(bstRootByName, nameBeforeUndo, app_it);
+        }
+
+        *app_it = lastRevision; // Kembalikan data
+        
+        if (nameBeforeUndo != app_it->name) { // Jika nama berubah setelah undo
+            bstRootByName = bstInsert(bstRootByName, app_it); // Masukkan kembali ke BST dengan nama yang sudah di-undo
+        }
+
+        saveApplicationsToFile();
+        saveRevisionsToFile();
+        cout << "Revisi dibatalkan untuk aplikasi '" << id << "'.\n";
     }
 
-    // Sorts applications by region alphabetically
     void sortByRegion() {
-        sort(applications.begin(), applications.end(), 
-             [](const Applicant& a, const Applicant& b) { return a.region < b.region; });
-        // No need to save to file here, as sorting is a view concern for display.
-        // If persistence of this sort order is desired, then call saveApplicationsToFile().
-        cout << "Applications sorted by region (for current view).\n";
+        applicationQueue.sort([](const Applicant& a, const Applicant& b) { return a.region < b.region; });
+        rebuildMap();
+        cout << "Aplikasi diurutkan berdasarkan region.\n";
     }
 
-    // Sorts applications by submission time (oldest first)
     void sortByTime() {
-        sort(applications.begin(), applications.end(), 
-             [](const Applicant& a, const Applicant& b) { return a.submissionTime < b.submissionTime; });
-        // Similar to sortByRegion, saving is optional depending on whether the sorted order should persist.
-        cout << "Applications sorted by submission time (for current view).\n";
+        applicationQueue.sort([](const Applicant& a, const Applicant& b) { return a.submissionTime < b.submissionTime; });
+        rebuildMap();
+        cout << "Aplikasi diurutkan berdasarkan waktu pengajuan.\n";
     }
 
-    // Displays all applications in the queue
     void displayQueue() {
-        if (applications.empty()) {
-            cout << "No applications in the queue.\n";
+        if (applicationQueue.empty()) { 
+            cout << "Antrian kosong.\n";  
+            return; 
+        }
+        cout << "\n--- Antrian Aplikasi KTP (FIFO) --- (" << applicationQueue.size() << " aplikasi)\n";
+        int position = 1;
+        for (const auto& app : applicationQueue) {
+            char timeBuffer[80];
+            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localtime(&app.submissionTime));
+            cout << position++ << ". ID: " << app.id << "\n   Nama: " << app.name << "\n   Alamat: " << app.address
+                 << "\n   Region: " << app.region << "\n   Status: " << app.status << "\n   Diajukan: " << timeBuffer << "\n----------------------------------------\n";
+        }
+    }
+    
+    void displayByBSTName() {
+        if (bstRootByName == nullptr) {
+            cout << "Tidak ada aplikasi untuk ditampilkan (BST kosong).\n";
             return;
         }
-        
-        cout << "\n--- KTP Application Queue --- (" << applications.size() << " applications)\n";
+        vector<list<Applicant>::iterator> sortedApps;
+        bstInOrderTraversal(bstRootByName, sortedApps);
+
+        cout << "\n--- Daftar Aplikasi KTP (Urut Nama via BST) --- (" << sortedApps.size() << " aplikasi)\n";
         int position = 1;
-        for (const auto& app : applications) {
+        for (const auto& app_iter : sortedApps) {
             char timeBuffer[80];
-            // Convert submissionTime to a human-readable string
-            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localtime(&app.submissionTime));
-            
-            cout << position++ << ". ID: " << app.id 
-                 << "\n   Name: " << app.name
-                 << "\n   Address: " << app.address
-                 << "\n   Region: " << app.region
-                 << "\n   Status: " << app.status
-                 << "\n   Submitted: " << timeBuffer
-                 << "\n----------------------------------------\n";
+            strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", localtime(&app_iter->submissionTime));
+            cout << position++ << ". ID: " << app_iter->id << "\n   Nama: " << app_iter->name << "\n   Alamat: " << app_iter->address
+                 << "\n   Region: " << app_iter->region << "\n   Status: " << app_iter->status << "\n   Diajukan: " << timeBuffer << "\n----------------------------------------\n";
         }
     }
 };
@@ -338,86 +438,65 @@ int main() {
     KtpSystem system;
 
     while (true) {
-        cout << "\n=== KTP Management System (Local JSON Storage) ==="
-             << "\n1. Submit New Application"
-             << "\n2. Process Verification"
-             << "\n3. Edit Application"
-             << "\n4. Undo Last Edit/Revision"
-             << "\n5. Sort by Region (current view)"
-             << "\n6. Sort by Submission Time (current view)"
-             << "\n7. Show Queue"
-             << "\n9. Exit"
-             << "\nEnter choice: ";
+        cout << "\n=== Sistem Manajemen KTP ==="
+             << "\n1. Ajukan Aplikasi Baru"
+             << "\n2. Proses Verifikasi"
+             << "\n3. Edit Aplikasi"
+             << "\n4. Batalkan Edit/Revisi Terakhir"
+             << "\n5. Urutkan berdasarkan Region (Tampilan FIFO)"
+             << "\n6. Urutkan berdasarkan Waktu Pengajuan (Tampilan FIFO)"
+             << "\n7. Tampilkan Antrian (FIFO)"
+             << "\n8. Tampilkan Aplikasi Urut Nama (BST)" // Opsi Baru
+             << "\n9. Keluar"
+             << "\nMasukkan pilihan: ";
 
         int choice;
-        if (!(cin >> choice)) {
-            cout << "Invalid input. Please enter a number." << endl;
-            cin.clear(); // Clear error flags
-            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Discard invalid input
-            continue; 
-        }
-        cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Remove newline character)
+        cin >> choice;
 
-        if (choice == 9) {
-            cout << "Exiting system." << endl;
-            break; // Exit the loop and program
+        if (cin.fail()) {
+            cout << "Input tidak valid. Silakan masukkan angka." << endl;
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            continue;
         }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+        if (choice == 9) { cout << "Keluar dari sistem." << endl; break; }
 
         string id, name, address, region;
-        
+
         switch (choice) {
             case 1:
-                cout << "Enter name: ";
-                getline(cin, name);
-                cout << "Enter address: ";
-                getline(cin, address);
-                cout << "Enter region: ";
-                getline(cin, region);
-                system.submitApplication(name, address, region);
+                cout << "Nama: "; getline(cin, name); cout << "Alamat: "; getline(cin, address);
+                cout << "Region: "; getline(cin, region); system.submitApplication(name, address, region);
                 break;
-                
-            case 2:
-                cout << "Enter the application ID to verify: ";
-                getline(cin, id);
-                system.processVerification(id);
-                break;
-            
+            case 2: cout << "ID verifikasi: "; getline(cin, id); system.processVerification(id); break;
             case 3:
-                cout << "Enter application ID to edit: ";
-                getline(cin, id);
-                cout << "Enter new name: ";
-                getline(cin, name);
-                cout << "Enter new address: ";
-                getline(cin, address);
-                cout << "Enter new region: ";
-                getline(cin, region);
+                cout << "ID edit: "; getline(cin, id); cout << "Nama baru: "; getline(cin, name);
+                cout << "Alamat baru: "; getline(cin, address); cout << "Region baru: "; getline(cin, region);
                 system.editApplication(id, name, address, region);
                 break;
-                
-            case 4:
-                cout << "Enter application ID to undo last edit for: ";
-                getline(cin, id);
-                system.undoRevision(id);
+            case 4: 
+                cout << "ID undo: "; 
+                getline(cin, id); 
+                system.undoRevision(id); 
                 break;
-
-            case 5:
-                system.sortByRegion();
-                system.displayQueue(); // Display after sorting
+            case 5: 
+                system.sortByRegion(); 
+                system.displayQueue(); 
                 break;
-                
-            case 6:
-                system.sortByTime();
-                system.displayQueue(); // Display after sorting
+            case 6: 
+                system.sortByTime(); 
+                system.displayQueue(); 
                 break;
-                
-            case 7:
-                system.displayQueue();
+            case 7: 
+                system.displayQueue(); 
                 break;
-            
-            default:
-                cout << "Invalid choice. Please try again.\n";
+            case 8: 
+                system.displayByBSTName(); 
+                break;
+            default: 
+                cout << "Pilihan tidak valid.\n";
         }
     }
-
     return 0;
 }

@@ -9,6 +9,6 @@ REM Run the C++ program
 echo.
 echo Starting KTP System...
 echo.
-ktp_system_simple.exe
+C:\Users\Hp\Documents\workspace\CS60\Semester4\Strukdat\DataStructure-Project\cpp\output\ktp_system_bst.exe
 
 echo Done.
