@@ -10,20 +10,20 @@ A simple C++ application for managing KTP applications using a binary search tre
 
 ### 1. Clone the Repo
 
-```bash
+\`\`\`bash
 git clone https://github.com/NSP-MO/DataStructure-Project.git
 cd DataStructure-Project
-```
+\`\`\`
 
 ### 2. Configure Your Supabase (optional)
 
 Create a file named `.env` in the project root (next to `setup.bat`) with **your** Supabase credentials:
 
-```ini
+\`\`\`ini
 # .env
 SUPABASE_URL=https://<your-project-ref>.supabase.co
 SUPABASE_SERVICE_KEY=<your-service-key>
-```
+\`\`\`
 
 > Replace `<your-project-ref>` and `<your-service-key>` with the values from your Supabase dashboard.
 
@@ -33,9 +33,9 @@ SUPABASE_SERVICE_KEY=<your-service-key>
 
 On **Windows**, just run:
 
-```batch
+\`\`\`batch
 setup.bat
-```
+\`\`\`
 
 This will:
 
@@ -49,9 +49,9 @@ This will:
 
 After setup, start the app with:
 
-```batch
+\`\`\`batch
 run_ktp.bat
-```
+\`\`\`
 
 This will:
 
@@ -79,12 +79,12 @@ Follow on-screen menus to navigate.
 
 If you prefer to compile by hand:
 
-```bash
+\`\`\`bash
 mkdir -p build
 cd build
 g++ -std=c++17 ../src/ktp_system_simple-bst.cpp -o ktp_system
 ./ktp_system
-```
+\`\`\`
 
 ---
 
