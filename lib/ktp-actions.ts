@@ -20,7 +20,20 @@ export async function getApplications(): Promise<Applicant[]> {
     return []
   }
 
-  return data as Applicant[]
+  // Convert and validate timestamps for proper display
+  const applicants = (data as Applicant[]).map((app) => ({
+    ...app,
+    submissionTime:
+      typeof app.submissionTime === "string"
+        ? Number.parseInt(app.submissionTime) * (app.submissionTime.length === 10 ? 1000 : 1)
+        : typeof app.submissionTime === "number"
+          ? app.submissionTime < 10000000000
+            ? app.submissionTime * 1000
+            : app.submissionTime
+          : Date.now(),
+  }))
+
+  return applicants
 }
 
 // Submit a new application
@@ -178,7 +191,7 @@ export async function sortByRegion(): Promise<Applicant[]> {
   return data as Applicant[]
 }
 
-// Sort applications by submission time
+// Sort applications by submission time (oldest to newest)
 export async function sortByTime(): Promise<Applicant[]> {
   const { data, error } = await supabase
     .from("ktp_applications")
@@ -190,5 +203,19 @@ export async function sortByTime(): Promise<Applicant[]> {
     return []
   }
 
-  return data as Applicant[]
+  // Convert and validate timestamps
+  const applicants = (data as Applicant[]).map((app) => ({
+    ...app,
+    submissionTime:
+      typeof app.submissionTime === "string"
+        ? Number.parseInt(app.submissionTime) * (app.submissionTime.length === 10 ? 1000 : 1)
+        : typeof app.submissionTime === "number"
+          ? app.submissionTime < 10000000000
+            ? app.submissionTime * 1000
+            : app.submissionTime
+          : Date.now(),
+  }))
+
+  // Sort by submission time (oldest to newest)
+  return applicants.sort((a, b) => a.submissionTime - b.submissionTime)
 }
