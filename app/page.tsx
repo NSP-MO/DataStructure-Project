@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { BadgeIcon as IdCard, Clock, Map, BarChart, RefreshCw, FileText } from "lucide-react"
+import { BadgeIcon as IdCard, Clock, Map, BarChart, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -35,7 +35,7 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-12">
           {[
             {
               icon: <Clock className="h-5 w-5" />,
@@ -68,14 +68,6 @@ export default function Home() {
               content: "Lihat status verifikasi pengajuan KTP dan persentase penyelesaian.",
               link: "/status",
               buttonText: "Lihat Status",
-            },
-            {
-              icon: <FileText className="h-5 w-5" />,
-              title: "Laporan Harian",
-              description: "Lihat laporan harian pengajuan KTP",
-              content: "Akses laporan harian pengajuan KTP untuk keperluan monitoring dan evaluasi.",
-              link: "/reports",
-              buttonText: "Lihat Laporan",
             },
           ].map((item, index) => (
             <Card key={index} className="flex flex-col h-full">
